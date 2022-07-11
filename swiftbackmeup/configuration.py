@@ -124,7 +124,7 @@ def verify_params_swift_auth(conf):
         elif "/v3" in conf["os_auth_url"]:
             conf["os_identity_api_version"] = 3
         else:
-            raise exceptions.ConfigurationException(
+            raise exceptions.ConfigurationExceptions(
                 "Could not determine the Identity API version to use from "
                 "OS_IDENTITY_VERSION or OS_AUTH_URL."
             )
