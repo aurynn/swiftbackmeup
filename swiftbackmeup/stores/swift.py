@@ -126,7 +126,7 @@ class Swift(stores.Store):
         else:
             swift_path = os.path.basename(file_path)
         
-        self.connection.object_store.upload(
+        self.connection.object_store.upload_object(
             container=container,
             filename=file_path,
             name=swift_path
