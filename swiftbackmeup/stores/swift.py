@@ -18,71 +18,47 @@ from swiftbackmeup import exceptions
 
 import os
 import re
-import swiftclient
+# import swiftclient
+import openstack
 
 
 class Swift(stores.Store):
     def __init__(self, conf):
-        if conf["os_identity_api_version"] == 2:
-            self.connection = self.get_connection_v2(conf)
-        elif conf["os_identity_api_version"] == 3:
-            self.connection = self.get_connection_v3(conf)
-
-    def get_connection_v2(self, conf):
-        return swiftclient.client.Connection(
-            auth_version="2",
-            user=conf["os_username"],
-            key=conf["os_password"],
-            tenant_name=conf["os_tenant_name"],
-            os_options={"region_name": conf["os_region_name"]},
-            authurl=conf["os_auth_url"],
-        )
-
-    def get_connection_v3(self, conf):
-        options = {
-            k.replace("os_", ""): conf[k]
-            for k in (
-                "os_region_name",
-                "os_project_id",
-                "os_project_name",
-                "os_user_domain_name",
-                "os_user_domain_id",
-                "os_project_domain_name",
-                "os_project_domain_id",
-            )
-            if conf[k]
-        }
-        return swiftclient.client.Connection(
-            auth_version="3",
-            user=conf["os_username"],
-            key=conf["os_password"],
-            os_options=options,
-            authurl=conf["os_auth_url"],
-        )
+        # Switch to relying on the /etc/openstack/clouds.yaml file
+        self.connection = openstack.connection.Connection(cloud=conf["os_cloud_name"])
 
     def delete(self, container, filename):
         try:
-            self.connection.delete_object(container, filename)
-        except swiftclient.exceptions.ClientException:
+            self.connection.object_store.delete_object(container, filename)
+        except openstack.exceptions.ResourceNotFound:
             raise exceptions.StoreExceptions(
                 "An error occured while deleting %s" % filename
             )
 
     def get(self, container, filename, output_directory):
         try:
-            resp_headers, obj_contents = self.connection.get_object(container, filename)
-        except swiftclient.exceptions.ClientException as exc:
-            if exc.http_reason == "Not Found":
-                raise exceptions.StoreExceptions(
-                    "%s: File not found in store" % filename
-                )
-
+            cont = self.connection.object_store.get_container_metadata(container) 
+        except openstack.exceptions.ResourceNotFound:
+            raise exceptions.StoreExceptions(
+                "%s: Container not found in store" % container
+            )
+        try:
+            obj = self.connection.object_store.get_object_metadata(container, filename)
+        except openstack.exceptions.ResourceNotFound:
+            raise exceptions.StoreExceptions(
+                "%s: File not found in store" % filename
+            )
+                
+        
         backup_directory = os.path.dirname("%s/%s" % (output_directory, filename))
         if not os.path.exists(backup_directory):
             os.makedirs(backup_directory)
-
-        with open("%s/%s" % (output_directory, filename), "w") as backup:
-            backup.write(obj_contents)
+        
+        self.connection.object_store.get_object(
+            filename,
+            container=container,
+            outfile="%s/%s" % (output_directory, filename),
+        )
 
     def list(
         self,
@@ -94,7 +70,7 @@ class Swift(stores.Store):
         filename_prefix=None,
         filename_suffix=None,
     ):
-
+        
         if pseudo_folder:
             if filename:
                 backup_name_pattern = "%s/%s" % (pseudo_folder, filename)
@@ -122,7 +98,7 @@ class Swift(stores.Store):
                 elif not filename_prefix and filename_suffix:
                     backup_name_pattern += ".*%s" % filename_suffix
 
-        resp, data = self.connection.get_container(container)
+        data = self.connection.object_store.objects(container=container)
 
         result = []
         for backup in data:
@@ -140,15 +116,18 @@ class Swift(stores.Store):
 
     def upload(self, container, file_path, pseudo_folder=None, create_container=True):
         try:
-            self.connection.head_container(container)
-        except swiftclient.exceptions.ClientException as exc:
-            if exc.http_reason == "Not Found" and create_container:
-                self.connection.put_container(container)
+            self.connection.object_store.get_container_metadata(container)
+        except openstack.exceptions.ResourceNotFound as exc:
+            if create_container:
+                self.connection.create_container(name=container)
 
         if pseudo_folder:
             swift_path = "%s/%s" % (pseudo_folder, os.path.basename(file_path))
         else:
             swift_path = os.path.basename(file_path)
-
-        with open(file_path, "rb") as fd:
-            self.connection.put_object(container, swift_path, contents=fd)
+        
+        self.connection.object_store.upload(
+            container=container,
+            filename=file_path,
+            name=swift_path
+        )
