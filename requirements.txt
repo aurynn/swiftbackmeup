@@ -4,3 +4,4 @@ python-keystoneclient
 python-swiftclient
 setuptools
 six
+openstacksdk
