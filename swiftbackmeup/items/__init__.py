@@ -114,7 +114,10 @@ class Item(object):
 
         backups_match = []
         for backup in backups:
-            pattern = backup['filename'].replace('%s/%s' % (self.swift_pseudo_folder, self.backup_filename_prefix), '').replace(self.backup_filename_suffix, '')  # noqa
+            if self.swift_pseudo_folder:
+                pattern = backup['filename'].replace('%s/%s' % (self.swift_pseudo_folder, self.backup_filename_prefix), '').replace(self.backup_filename_suffix, '')  # noqa
+            else:
+                pattern = backup['filename'].replace('%s' % (self.backup_filename_prefix), '').replace(self.backup_filename_suffix, '')
             try:
                 datetime.datetime.strptime(pattern, mode['pattern'])
                 backups_match.append(backup)
