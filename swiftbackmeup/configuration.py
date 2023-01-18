@@ -32,6 +32,7 @@ _SWIFT_AUTH_FIELDS = (
     "os_project_domain_id",
     "os_user_domain_name",
     "os_user_domain_id",
+    "os_cloud_name"
 )
 
 _FIELDS = (
