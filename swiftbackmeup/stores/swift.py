@@ -29,7 +29,7 @@ class Swift(stores.Store):
 
     def delete(self, container, filename):
         try:
-            self.connection.object_store.delete_object(container, filename)
+            self.connection.object_store.delete_object(filename, container=container)
         except openstack.exceptions.ResourceNotFound:
             raise exceptions.StoreExceptions(
                 "An error occured while deleting %s" % filename
